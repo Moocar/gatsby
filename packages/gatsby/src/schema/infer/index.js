@@ -129,7 +129,7 @@ const addInferredTypes = ({
     // If the typeNames are in any way different, then resave the
     // types from scratch to be safe
     const printedTypes = typeNames.map(typeName =>
-      printType(schemaComposer.getTC(typeName).getType())
+      printType(schemaComposer.getOTC(typeName).getType())
     )
     exampleValueStore.saveInferredTypes(typeNames, printedTypes)
   } else {

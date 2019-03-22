@@ -296,124 +296,6 @@ async function createPages({ bootstrapSpan, graphqlRunner }) {
   }
 }
 
-async function runBootstrapQueries({ bootstrapSpan, graphqlRunner }) {
-  let activity
-  if (flags.srcDirty) {
-    console.log(`srcDirty`)
-    // Extract queries
-    activity = report.activityTimer(`extract queries from components`, {
-      parentSpan: bootstrapSpan,
-    })
-    activity.start()
-    await extractQueries()
-    activity.end()
-  }
-
-  // Start the createPages hot reloader.
-  if (process.env.NODE_ENV !== `production`) {
-    require(`./page-hot-reloader`)(graphqlRunner)
-  }
-
-  // Run queries
-  activity = report.activityTimer(`run graphql queries`, {
-    parentSpan: bootstrapSpan,
-  })
-  activity.start()
-  const startQueries = process.hrtime()
-  queryQueue.on(`task_finish`, () => {
-    const stats = queryQueue.getStats()
-    activity.setStatus(
-      `${stats.total}/${stats.peak} ${(
-        stats.total / convertHrtime(process.hrtime(startQueries)).seconds
-      ).toFixed(2)} queries/second`
-    )
-  })
-  await runInitialQueries(activity)
-  activity.end()
-}
-
-function saveQuery(components, component, query) {
-  if (query.isStaticQuery) {
-    boundActionCreators.replaceStaticQuery({
-      name: query.name,
-      componentPath: query.path,
-      id: query.jsonName,
-      jsonName: query.jsonName,
-      query: query.text,
-      hash: query.hash,
-    })
-    boundActionCreators.deleteComponentsDependencies([query.jsonName])
-  } else if (components.has(component)) {
-    boundActionCreators.replaceComponentQuery({
-      query: query.text,
-      componentPath: component,
-    })
-  }
-}
-
-async function runIncrementalQueries({ bootstrapSpan }) {
-  // TODO clearInactiveComponents
-  if (flags.schema) {
-    console.log(`recompiling queries because schema changed`)
-    // Extract queries
-    let activity = report.activityTimer(`extract queries from components`, {
-      parentSpan: bootstrapSpan,
-    })
-    activity.start()
-    const queries = await queryCompiler()
-    const components = new Map(store.getState().components)
-    queries.forEach((query, component) =>
-      saveQuery(components, component, query)
-    )
-    activity.end()
-    const pages = store.getState().pages
-    for (const path of pages) {
-      flags.queryJob(path)
-    }
-    for (const jsonName of store.getState().staticQueryComponents) {
-      flags.queryJob(jsonName)
-    }
-  }
-
-  const state = store.getState()
-
-  flags.nodes.forEach(nodeId => {
-    const queryIds = state.componentDataDependencies.nodes[nodeId] || []
-    queryIds.forEach(queryId => {
-      flags.queryJob(queryId)
-    })
-  })
-
-  flags.nodeTypeCollections.forEach(type => {
-    const queries = state.componentDataDependencies.connections[type] || []
-    queries.forEach(queryId => {
-      flags.queryJob(queryId)
-    })
-  })
-
-  // All created/changed pages need to be rerun
-  flags.pages.forEach(path => {
-    flags.queryJob(path)
-  })
-
-  // Run queries
-  let activity = report.activityTimer(`run graphql queries`, {
-    parentSpan: bootstrapSpan,
-  })
-  activity.start()
-  const startQueries = process.hrtime()
-  queryQueue.on(`task_finish`, () => {
-    const stats = queryQueue.getStats()
-    activity.setStatus(
-      `${stats.total}/${stats.peak} ${(
-        stats.total / convertHrtime(process.hrtime(startQueries)).seconds
-      ).toFixed(2)} queries/second`
-    )
-  })
-  await runQueriesForPathnames(Array.from(flags.queryJobs))
-  activity.end()
-}
-
 async function writeRedirects({ bootstrapSpan }) {
   // Write out redirects.
   const activity = report.activityTimer(`write out redirect data`, {
@@ -569,7 +451,38 @@ module.exports = async (args: BootstrapArgs) => {
     pageData.getQueue().push({ path })
   }
 
-  await runBootstrapQueries({ bootstrapSpan, graphqlRunner })
+  if (flags.srcDirty) {
+    console.log(`srcDirty`)
+    // Extract queries
+    activity = report.activityTimer(`extract queries from components`, {
+      parentSpan: bootstrapSpan,
+    })
+    activity.start()
+    await extractQueries()
+    activity.end()
+  }
+
+  // Start the createPages hot reloader.
+  if (process.env.NODE_ENV !== `production`) {
+    require(`./page-hot-reloader`)(graphqlRunner)
+  }
+
+  // Run queries
+  activity = report.activityTimer(`run graphql queries`, {
+    parentSpan: bootstrapSpan,
+  })
+  activity.start()
+  const startQueries = process.hrtime()
+  queryQueue.on(`task_finish`, () => {
+    const stats = queryQueue.getStats()
+    activity.setStatus(
+      `${stats.total}/${stats.peak} ${(
+        stats.total / convertHrtime(process.hrtime(startQueries)).seconds
+      ).toFixed(2)} queries/second`
+    )
+  })
+  await runInitialQueries(activity)
+  activity.end()
 
   // Write out files.
   activity = report.activityTimer(`write out page data`, {

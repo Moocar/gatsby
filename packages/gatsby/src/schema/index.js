@@ -31,7 +31,7 @@ function makeExampleValueStore() {
     },
     saveTypeIfChanged: (schemaComposer, typeName) => {
       const storedTypes = store.getState().depGraph.inferredTypes
-      const printedType = printType(schemaComposer.getTC(typeName).getType())
+      const printedType = printType(schemaComposer.getOTC(typeName).getType())
       if (storedTypes[typeName] !== printedType) {
         console.log(`saving inferred type: [${typeName}]`)
         store.dispatch({
